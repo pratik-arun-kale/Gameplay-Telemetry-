@@ -166,11 +166,12 @@ body {
 
 .panel-title {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 2px;
-  color: var(--text2);
+  color: var(--text);
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  font-weight: 700;
 }
 
 /* ── Upload zone ───────────────────────────────────────────────────────────── */
@@ -196,11 +197,12 @@ body {
 .filter-group { margin-bottom: 8px; }
 .filter-label {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 1.5px;
-  color: var(--text2);
+  color: var(--text);
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 select {
   width: 100%;
@@ -270,9 +272,10 @@ select option { background: var(--bg3); }
 
 .match-id {
   font-family: var(--mono);
-  font-size: 9px;
-  color: var(--text2);
-  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--text);
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 .match-meta { display: flex; align-items: center; gap: 6px; }
 .match-counts { font-size: 11px; color: var(--text2); }
@@ -388,7 +391,7 @@ select option { background: var(--bg3); }
   position: absolute;
   top: 0; left: 0;
   width: 560px; height: 560px;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .map-label {
@@ -398,6 +401,8 @@ select option { background: var(--bg3); }
   font-size: 10px;
   letter-spacing: 2px;
   color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.6);
   background: rgba(7,9,12,.75);
   padding: 3px 8px;
   border: 1px solid var(--border);
@@ -430,7 +435,7 @@ select option { background: var(--bg3); }
 /* Zoom controls */
 .zoom-controls {
   position: absolute;
-  bottom: 16px; right: 16px;
+  top: 16px; right: 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -469,6 +474,24 @@ select option { background: var(--bg3); }
   white-space: nowrap;
   box-shadow: 0 4px 16px rgba(0,0,0,.5);
 }
+
+/* Overlay container: allow the map to remain interactive but enable
+   pointer-events only on interactive overlay children. */
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.overlay-control { pointer-events: auto; }
+.legend-wrapper {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+/* Ensure zoom controls sit above legend and remain clickable */
+.zoom-controls { z-index: 120; }
+
 
 /* ── Timeline ──────────────────────────────────────────────────────────────── */
 .timeline-section {
@@ -611,12 +634,13 @@ select option { background: var(--bg3); }
 }
 .player-name {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
 }
 .player-tag {
   font-size: 8px;
@@ -664,17 +688,18 @@ select option { background: var(--bg3); }
 /* ── Misc ──────────────────────────────────────────────────────────────────── */
 .no-data {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 14px;
   color: var(--text2);
   text-align: center;
   padding: 18px 0;
+  font-weight: 700;
   opacity: .6;
 }
 
 /* ── Replay Legend overlay ──────────────────────────────────────────────────── */
 .replay-legend {
   position: absolute;
-  bottom: 56px;       /* above zoom controls */
+  bottom: 16px;
   right: 16px;
   width: 168px;
   background: rgba(7, 9, 12, 0.88);
@@ -707,9 +732,11 @@ select option { background: var(--bg3); }
   background: rgba(0, 204, 255, 0.06);
 }
 .legend-title {
-  font-size: 8px;
-  letter-spacing: 2px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
   color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.6);
 }
 .legend-collapse-btn {
   font-size: 10px;
@@ -721,14 +748,15 @@ select option { background: var(--bg3); }
   padding: 6px 10px;
 }
 .legend-section-title {
-  font-size: 7px;
-  letter-spacing: 2px;
+  font-size: 9px;
+  letter-spacing: 0.02em;
   color: var(--text2);
   text-transform: uppercase;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
+  font-weight: 600;
 }
 .legend-section-count {
   font-size: 7px;

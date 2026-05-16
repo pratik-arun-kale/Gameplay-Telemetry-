@@ -182,22 +182,27 @@ export function MapCanvas({
         </div>
       )}
 
-      {/* Zoom controls */}
-      <div className="zoom-controls">
-        <button className="zoom-btn" onClick={() => applyZoom(0.25)}>+</button>
-        <button className="zoom-btn" onClick={() => applyZoom(-0.25)}>−</button>
-        <button className="zoom-btn zoom-reset" onClick={resetView}>⊙</button>
-      </div>
+      {/* Overlay container for floating UI (pointer-events:none on container, enabled on controls) */}
+      <div className="map-overlay">
+        {/* Zoom controls (pointer-events enabled) */}
+        <div className="overlay-control zoom-controls">
+          <button className="zoom-btn" onClick={() => applyZoom(0.25)}>+</button>
+          <button className="zoom-btn" onClick={() => applyZoom(-0.25)}>−</button>
+          <button className="zoom-btn zoom-reset" onClick={resetView}>⊙</button>
+        </div>
 
-      {/* Legend overlay — positioned absolute inside map-area, not inside map-wrap */}
-      {canRender && (
-        <ReplayLegend
-          players={players}
-          selectedPlayers={selectedPlayers}
-          layers={layers}
-          onHoverPlayer={setHoveredPlayer}
-        />
-      )}
+        {/* Legend overlay wrapper (pointer-events enabled) */}
+        {canRender && (
+          <div className="overlay-control legend-wrapper">
+            <ReplayLegend
+              players={players}
+              selectedPlayers={selectedPlayers}
+              layers={layers}
+              onHoverPlayer={setHoveredPlayer}
+            />
+          </div>
+        )}
+      </div>
 
       {tooltip && (
         <div className="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
