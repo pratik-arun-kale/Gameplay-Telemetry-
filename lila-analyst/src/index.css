@@ -155,14 +155,30 @@ body {
   text-align: center;
   cursor: pointer;
   background: var(--bg3);
-  transition: border-color .2s, background .2s;
+  transition: border-color .2s, background .2s, opacity .2s;
 }
-.upload-zone:hover,
+.upload-zone:hover:not(.loading),
 .upload-zone.drag-over {
   border-color: var(--accent);
   background: rgba(0,204,255,.05);
 }
-.up-icon { font-size: 18px; margin-bottom: 3px; }
+.upload-zone.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+  border-color: var(--text2);
+}
+.up-icon {
+  font-size: 18px;
+  margin-bottom: 3px;
+  display: inline-block;
+}
+.upload-zone.loading .up-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .up-text { font-size: 10px; color: var(--text2); line-height: 1.5; }
 .up-text strong { display: block; color: var(--accent); font-size: 11px; }
 

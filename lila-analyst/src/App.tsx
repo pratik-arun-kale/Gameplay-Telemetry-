@@ -53,7 +53,7 @@ export default function App() {
         <aside className="left-panel">
           <div className="panel-section">
             <div className="panel-title">// Data Input</div>
-            <UploadZone onFiles={loadFiles} />
+            <UploadZone onFiles={loadFiles} status={state.status} />
           </div>
 
           <LayerToggles

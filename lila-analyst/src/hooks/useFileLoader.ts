@@ -3,6 +3,7 @@ import type { MatchInfo, PlayerFile } from '../types'
 import { buildMatchGroups, mergeMatchFiles } from '../utils/dataLoader'
 import { parseRealMatchId, isHuman } from '../utils/mapUtils'
 import type { AppState, Action } from './useAppState'
+import { createFileIndex, indexFiles, findFile, getIndexStats } from '../utils/fileIndexer'
 
 type Dispatch = (action: Action) => void
 
@@ -10,62 +11,64 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
 
   const loadFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files)
-    dispatch({ type: 'SET_STATUS', value: `LOADING ${arr.length} FILE${arr.length !== 1 ? 'S' : ''}…` })
+    dispatch({ type: 'SET_STATUS', value: `INDEXING ${arr.length} FILE${arr.length !== 1 ? 'S' : ''}…` })
 
     let matchIndex: MatchInfo[] | null = null
-    const playerFiles = new Map<string, unknown>()
+    const jsonFiles: File[] = []
+    const folderSet = new Set<string>()
 
+    // First pass: separate matches.json from data files
     for (const file of arr) {
       try {
-        const text = await file.text()
-        const parsed = JSON.parse(text)
+        // Extract folder from webkitRelativePath if available
+        const webkitPath = (file as any).webkitRelativePath || ''
+        const pathParts = webkitPath.split('/')
+        if (pathParts.length > 1 && pathParts[0]) {
+          folderSet.add(pathParts[0])
+        }
 
-        if (
-          file.name === 'matches.json' ||
-          (Array.isArray(parsed) && parsed.length > 0 && 'json_file' in parsed[0])
-        ) {
-          matchIndex = parsed as MatchInfo[]
-        } else if (parsed && typeof parsed === 'object' && 'match_info' in parsed && 'events' in parsed) {
-          // Index by multiple keys so look-ups succeed regardless of path format
-          const pf = parsed as PlayerFile
-          const basename = file.name
-          playerFiles.set(basename, pf)
-          // Also key by the json_file path stored in match_info
-          if (pf.match_info?.json_file) {
-            playerFiles.set(pf.match_info.json_file, pf)
-            playerFiles.set(pf.match_info.json_file.split('/').pop()!, pf)
+        if (file.name === 'matches.json' || file.name.endsWith('.json')) {
+          const text = await file.text()
+          const parsed = JSON.parse(text)
+
+          // Check if this is matches.json (array of MatchInfo)
+          if (
+            file.name === 'matches.json' ||
+            (Array.isArray(parsed) && parsed.length > 0 && 'json_file' in parsed[0])
+          ) {
+            matchIndex = parsed as MatchInfo[]
+          } else if (parsed && typeof parsed === 'object' && 'match_info' in parsed && 'events' in parsed) {
+            // This is a player file - don't parse yet, just collect it
+            jsonFiles.push(file)
           }
         }
-      } catch {
-        console.warn('Failed to parse', file.name)
+      } catch (e) {
+        console.warn(`Failed to parse ${file.name}:`, e)
       }
     }
 
-    if (playerFiles.size > 0) {
-      dispatch({ type: 'MERGE_FILES', files: playerFiles })
-    }
+    // Build file index (no parsing of data yet)
+    const fileIndex = createFileIndex()
+    indexFiles(fileIndex, jsonFiles)
+    dispatch({ type: 'SET_FILE_INDEX', index: fileIndex })
+    dispatch({ type: 'SET_UPLOADED_FOLDERS', folders: folderSet })
 
+    const stats = getIndexStats(fileIndex)
+    console.log('Indexed files:', stats)
+
+    // Process matches.json only once
     if (matchIndex) {
       const groups = buildMatchGroups(matchIndex)
-
-      // Annotate mapId from any already-loaded player files
-      for (const [realId, group] of groups) {
-        for (const fp of group.filePaths) {
-          const data = playerFiles.get(fp) ?? playerFiles.get(fp.split('/').pop()!) as PlayerFile | undefined
-          if (data && (data as PlayerFile).events?.length) {
-            group.mapId = (data as PlayerFile).events[0].map_id
-            break
-          }
-        }
-      }
-
       dispatch({ type: 'SET_INDEX', groups })
+      dispatch({ type: 'SET_STATUS', value: `READY — ${stats.totalFiles} FILES INDEXED FROM ${stats.folders.length} FOLDER${stats.folders.length !== 1 ? 'S' : ''}` })
+    } else if (jsonFiles.length > 0) {
+      dispatch({ type: 'SET_STATUS', value: `⚠ NO MATCHES.JSON FOUND — ${stats.totalFiles} FILES INDEXED` })
+    } else {
+      dispatch({ type: 'SET_STATUS', value: '⚠ NO JSON FILES FOUND' })
     }
-
-    dispatch({ type: 'SET_STATUS', value: 'READY' })
   }, [dispatch])
 
-  // ── Load and activate a match ─────────────────────────────────────────────
+  // ── Load and activate a match (lazy load only needed files) ─────────────────
 
   const loadMatch = useCallback(async (realMatchId: string) => {
     const group = state.matchGroups.get(realMatchId)
@@ -74,21 +77,47 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
     dispatch({ type: 'SET_STATUS', value: 'LOADING MATCH…' })
 
     const playerFileDatas: PlayerFile[] = []
+    const missingFiles: string[] = []
 
-    for (const fp of group.filePaths) {
-      // Try multiple key variants
-      const basename = fp.split('/').pop()!
-      const data = (state.loadedFiles.get(fp) ??
-                    state.loadedFiles.get(basename) ??
-                    state.loadedFiles.get(fp.replace('/', '\\'))) as PlayerFile | undefined
+    // Try to load each file referenced in the match group
+    for (const filePath of group.filePaths) {
+      try {
+        // Check cache first
+        let cached = state.parsedCache.get(filePath)
+        if (cached) {
+          playerFileDatas.push(cached as PlayerFile)
+          continue
+        }
 
-      if (data?.events?.length) {
-        playerFileDatas.push(data)
+        // Try to find file in index
+        const fileEntry = findFile(state.fileIndex, filePath)
+        if (!fileEntry) {
+          console.warn(`File not found: ${filePath}`)
+          missingFiles.push(filePath)
+          continue
+        }
+
+        // Lazy load: read and parse the file
+        const text = await fileEntry.file.text()
+        const parsed = JSON.parse(text) as PlayerFile
+
+        if (parsed?.events?.length) {
+          playerFileDatas.push(parsed)
+          // Cache for future use
+          dispatch({ type: 'ADD_PARSED_CACHE', key: filePath, data: parsed })
+        }
+      } catch (e) {
+        console.error(`Error loading file ${filePath}:`, e)
+        missingFiles.push(filePath)
       }
     }
 
     if (!playerFileDatas.length) {
-      dispatch({ type: 'SET_STATUS', value: 'NO DATA — LOAD PLAYER JSON FILES' })
+      const msg = missingFiles.length > 0
+        ? `⚠ MISSING ${missingFiles.length} FILE${missingFiles.length !== 1 ? 'S' : ''} — UPLOAD DATA FOR ${group.folder || 'MISSING FOLDER'}`
+        : '⚠ NO DATA — UPLOAD PLAYER JSON FILES'
+      dispatch({ type: 'SET_STATUS', value: msg })
+      console.warn(`Missing files for match ${realMatchId}:`, missingFiles)
       return
     }
 
@@ -96,6 +125,10 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
 
     // Update mapId in group index
     dispatch({ type: 'UPDATE_MAP_ID', realMatchId, mapId })
+
+    const statusMsg = missingFiles.length > 0
+      ? `MATCH LOADED (⚠ MISSING ${missingFiles.length} FILE${missingFiles.length !== 1 ? 'S' : ''})`
+      : 'MATCH LOADED'
 
     dispatch({
       type: 'LOAD_MATCH',
@@ -106,8 +139,8 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
       mapId,
     })
 
-    dispatch({ type: 'SET_STATUS', value: 'MATCH LOADED' })
-  }, [state.matchGroups, state.loadedFiles, dispatch])
+    dispatch({ type: 'SET_STATUS', value: statusMsg })
+  }, [state.matchGroups, state.fileIndex, state.parsedCache, dispatch])
 
   return { loadFiles, loadMatch }
 }

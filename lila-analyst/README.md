@@ -38,11 +38,18 @@ No environment variables required. The app is fully client-side.
 ### Step 1 — Load your JSON data
 Click or drag files into the **"Data Input"** upload zone in the left panel.
 
+**New Feature:** You can now upload the entire dataset root folder or individual date folders (`February_10`, `February_11`, etc.) at once! The tool will automatically index all files and resolve matches across folders, even if you upload them in multiple sessions.
+
 You need to load:
 - `matches.json` — the match index file (output of the Python pipeline)
-- Player JSON files — one or more `{user_id}_{match_id}.json` files
+- Player JSON files — one or more `{user_id}_{match_id}.json` files (indexed on demand, not parsed upfront)
 
-You can load all files at once (multi-select or drag a whole folder's contents).
+For best results:
+- **Option A (Recommended):** Upload the entire dataset root folder with all date subfolders
+- **Option B:** Upload individual date folders as needed
+- **Option C:** Upload multiple folders in separate sessions—they'll be indexed together
+
+See [UPLOAD_FLOW_IMPROVEMENTS.md](./UPLOAD_FLOW_IMPROVEMENTS.md) for details on lazy loading and multi-folder support.
 
 ### Step 2 — Load minimap images
 Drag the minimap PNG/JPG images from the `minimaps/` folder directly onto the dark map area in the centre:

@@ -1,10 +1,13 @@
 import { useReducer, useCallback } from 'react'
 import type { MatchGroup, Player, ProcessedEvent, Layers, FilterMap, FilterDate, MapId } from '../types'
+import type { FileIndex } from '../utils/fileIndexer'
 
 export interface AppState {
   // Index
   matchGroups: Map<string, MatchGroup>   // realMatchId -> group
-  loadedFiles: Map<string, unknown>      // json_file path -> parsed JSON
+  loadedFiles: Map<string, unknown>      // json_file path -> parsed JSON (deprecated, use fileIndex)
+  fileIndex: FileIndex                   // global file index for lazy loading
+  parsedCache: Map<string, unknown>      // cache for lazy-loaded parsed files
 
   // Filters
   filterMap:  FilterMap
@@ -28,11 +31,15 @@ export interface AppState {
 
   // UI
   status: string
+  uploadedFolders: Set<string>  // track uploaded folders for feedback
 }
 
 export type Action =
   | { type: 'SET_INDEX'; groups: Map<string, MatchGroup> }
   | { type: 'MERGE_FILES'; files: Map<string, unknown> }
+  | { type: 'SET_FILE_INDEX'; index: FileIndex }
+  | { type: 'ADD_PARSED_CACHE'; key: string; data: unknown }
+  | { type: 'SET_UPLOADED_FOLDERS'; folders: Set<string> }
   | { type: 'UPDATE_MAP_ID'; realMatchId: string; mapId: MapId }
   | { type: 'SET_FILTER_MAP';  value: FilterMap }
   | { type: 'SET_FILTER_DATE'; value: FilterDate }
@@ -55,6 +62,18 @@ function reducer(state: AppState, action: Action): AppState {
       const merged = new Map([...state.loadedFiles, ...action.files])
       return { ...state, loadedFiles: merged }
     }
+
+    case 'SET_FILE_INDEX':
+      return { ...state, fileIndex: action.index }
+
+    case 'ADD_PARSED_CACHE': {
+      const cache = new Map(state.parsedCache)
+      cache.set(action.key, action.data)
+      return { ...state, parsedCache: cache }
+    }
+
+    case 'SET_UPLOADED_FOLDERS':
+      return { ...state, uploadedFolders: action.folders }
 
     case 'UPDATE_MAP_ID': {
       const groups = new Map(state.matchGroups)
@@ -121,6 +140,8 @@ function reducer(state: AppState, action: Action): AppState {
 const INITIAL: AppState = {
   matchGroups: new Map(),
   loadedFiles: new Map(),
+  fileIndex: { byPath: new Map(), byBasename: new Map(), folders: new Set() },
+  parsedCache: new Map(),
   filterMap:   'all',
   filterDate:  'all',
   activeMatchId: null,
@@ -141,6 +162,7 @@ const INITIAL: AppState = {
   isPlaying: false,
   playSpeed: 1,
   status: 'STANDBY',
+  uploadedFolders: new Set(),
 }
 
 export function useAppState() {
