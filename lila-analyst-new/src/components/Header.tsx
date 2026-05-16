@@ -6,10 +6,18 @@ interface Props {
   eventCount: number
   activeMap: string
   status: string
+  indexingState: 'idle' | 'indexing' | 'done'
+  indexedCount: number
+  totalFileCount: number
 }
 
-export function Header({ matchCount, playerCount, eventCount, activeMap, status }: Props) {
-  const isReady = status === 'READY' || status === 'MATCH LOADED'
+export function Header({
+  matchCount, playerCount, eventCount, activeMap, status,
+  indexingState, indexedCount, totalFileCount,
+}: Props) {
+  const isReady = indexingState === 'done' || status.startsWith('LOADED')
+  const isIndexing = indexingState === 'indexing'
+  const progress = totalFileCount > 0 ? (indexedCount / totalFileCount) * 100 : 0
 
   return (
     <header className="hdr">
@@ -19,15 +27,37 @@ export function Header({ matchCount, playerCount, eventCount, activeMap, status 
         <span className="hdr-sub">ANALYST</span>
       </div>
       <div className="hdr-sep" />
-      <Stat label="Matches" value={matchCount} color="accent" />
-      <Stat label="Players"  value={playerCount} color="orange" />
-      <Stat label="Events"   value={eventCount}  color="green" />
-      <Stat label="Map"      value={activeMap || '—'} color="accent" />
+      <Stat label="Matches"  value={matchCount}          color="accent" />
+      <Stat label="Players"  value={playerCount}         color="orange" />
+      <Stat label="Events"   value={eventCount}          color="green" />
+      <Stat label="Map"      value={activeMap || '—'}    color="accent" />
+
+      {/* Indexing progress bar — visible only during indexing */}
+      {(isIndexing || (indexingState === 'done' && totalFileCount > 0)) && (
+        <div className="hdr-index-progress">
+          <div className="index-bar-track">
+            <div
+              className={`index-bar-fill ${isIndexing ? 'indexing' : 'done'}`}
+              style={{ width: `${isIndexing ? progress : 100}%` }}
+            />
+          </div>
+          <span className="index-label">
+            {isIndexing
+              ? `Indexing ${indexedCount} / ${totalFileCount}`
+              : `${matchCount} matches indexed`}
+          </span>
+        </div>
+      )}
+
       <div className="hdr-right">
         <span
           className="status-dot"
-          style={{ background: isReady ? 'var(--green)' : 'var(--accent2)',
-                   boxShadow: `0 0 8px ${isReady ? 'var(--green)' : 'var(--accent2)'}` }}
+          style={{
+            background:  isReady   ? 'var(--green)'   :
+                         isIndexing ? 'var(--accent2)' :
+                                      'var(--accent2)',
+            boxShadow: `0 0 8px ${isReady ? 'var(--green)' : 'var(--accent2)'}`,
+          }}
         />
         <span className="status-text">{status}</span>
       </div>

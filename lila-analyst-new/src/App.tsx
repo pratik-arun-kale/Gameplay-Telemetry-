@@ -12,17 +12,18 @@ import { Timeline }     from './components/Timeline'
 import { StatsPanel, PlayerList } from './components/StatsPanel'
 import { EventLog }     from './components/EventLog'
 
-import type { FilterMap, FilterDate, Layers, MapId } from './types'
+import type { FilterMap, FilterDate, Layers } from './types'
 
-const MAP_DISPLAY: Record<MapId, string> = {
+const MAP_DISPLAY: Record<string, string> = {
   AmbroseValley: 'AMBROSE',
   GrandRift:     'GRAND RIFT',
   Lockdown:      'LOCKDOWN',
+  Unknown:       'UNKNOWN',
 }
 
 export default function App() {
-  const { state, dispatch, filteredMatches } = useAppState()
-  const { loadFiles, loadMatch }             = useFileLoader(state, dispatch)
+  const { state, dispatch, filteredMatches, mapCounts } = useAppState()
+  const { loadFiles, loadMatch }                        = useFileLoader(state, dispatch)
 
   const { play, pause, rewind, seek } = usePlayback(
     state.isPlaying,
@@ -32,7 +33,7 @@ export default function App() {
     dispatch
   )
 
-  // Debug: Log state changes for event log
+  // Debug: log state changes for event log
   React.useEffect(() => {
     if (state.activeMatchId) {
       const nonPosCount = state.allEvents.filter(e => e.event !== 'Position' && e.event !== 'BotPosition').length
@@ -47,21 +48,30 @@ export default function App() {
     }
   }, [state.activeMatchId, state.allEvents.length, state.timelineCurrent])
 
-  const filtered = filteredMatches()
+  const filtered  = filteredMatches()
+  const counts    = mapCounts()
 
-  // Unique human player count across loaded files
+  // Human player count across active match events
   const humanSet = new Set(
     state.allEvents.filter(e => !e.isBot).map(e => e.userId)
   )
 
+  const activeMapDisplay =
+    state.activeMatchId && state.mapId
+      ? MAP_DISPLAY[state.mapId] || state.mapId
+      : '—'
+
   return (
     <div className="app">
       <Header
-        matchCount={state.matchGroups.size}
+        matchCount={state.indexedMatches.size}
         playerCount={humanSet.size}
         eventCount={state.allEvents.length}
-        activeMap={state.activeMatchId && state.mapId ? MAP_DISPLAY[state.mapId] || state.mapId : '—'}
+        activeMap={activeMapDisplay}
         status={state.status}
+        indexingState={state.indexingState}
+        indexedCount={state.indexedCount}
+        totalFileCount={state.totalFileCount}
       />
 
       <div className="app-body">
@@ -82,10 +92,13 @@ export default function App() {
             activeMatchId={state.activeMatchId}
             filterMap={state.filterMap}
             filterDate={state.filterDate}
+            mapCounts={counts}
+            matchLoadStates={state.matchLoadStates}
+            indexingState={state.indexingState}
             onSelectMatch={loadMatch}
             onFilterMap={(v: FilterMap) => dispatch({ type: 'SET_FILTER_MAP', value: v })}
             onFilterDate={(v: FilterDate) => dispatch({ type: 'SET_FILTER_DATE', value: v })}
-            totalCount={state.matchGroups.size}
+            totalCount={state.indexedMatches.size}
           />
         </aside>
 

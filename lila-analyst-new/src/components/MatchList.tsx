@@ -1,11 +1,14 @@
 import React from 'react'
-import type { MatchGroup, FilterMap, FilterDate } from '../types'
+import type { MatchMetadata, FilterMap, FilterDate, MapCounts, MatchLoadState } from '../types'
 
 interface Props {
-  matches: MatchGroup[]
+  matches: MatchMetadata[]
   activeMatchId: string | null
   filterMap:    FilterMap
   filterDate:   FilterDate
+  mapCounts:    MapCounts
+  matchLoadStates: Map<string, MatchLoadState>
+  indexingState: 'idle' | 'indexing' | 'done'
   onSelectMatch: (id: string) => void
   onFilterMap:   (v: FilterMap) => void
   onFilterDate:  (v: FilterDate) => void
@@ -16,16 +19,27 @@ const MAP_SHORT: Record<string, string> = {
   AmbroseValley: 'AMBROSE',
   GrandRift:     'GRAND RIFT',
   Lockdown:      'LOCKDOWN',
+  Unknown:       'UNKNOWN',
 }
 const MAP_CLASS: Record<string, string> = {
   AmbroseValley: 'badge-ambrose',
   GrandRift:     'badge-grand',
   Lockdown:      'badge-lock',
+  Unknown:       'badge-unknown',
+}
+
+const LOAD_STATE_BADGE: Record<MatchLoadState, { label: string; cls: string }> = {
+  indexed: { label: 'INDEXED', cls: 'load-badge-indexed' },
+  loading: { label: 'LOADING…', cls: 'load-badge-loading' },
+  loaded:  { label: '● LOADED', cls: 'load-badge-loaded' },
+  error:   { label: '⚠ ERROR', cls: 'load-badge-error' },
 }
 
 export function MatchList({
   matches, activeMatchId,
   filterMap, filterDate,
+  mapCounts, matchLoadStates,
+  indexingState,
   onSelectMatch, onFilterMap, onFilterDate,
   totalCount,
 }: Props) {
@@ -37,10 +51,21 @@ export function MatchList({
         <div className="filter-group">
           <label className="filter-label">Map</label>
           <select value={filterMap} onChange={e => onFilterMap(e.target.value as FilterMap)}>
-            <option value="all">All Maps</option>
-            <option value="AmbroseValley">Ambrose Valley</option>
-            <option value="GrandRift">Grand Rift</option>
-            <option value="Lockdown">Lockdown</option>
+            <option value="all">All Maps ({totalCount})</option>
+            <option value="AmbroseValley">
+              Ambrose Valley ({mapCounts.AmbroseValley})
+            </option>
+            <option value="GrandRift">
+              Grand Rift ({mapCounts.GrandRift})
+            </option>
+            <option value="Lockdown">
+              Lockdown ({mapCounts.Lockdown})
+            </option>
+            {mapCounts.Unknown > 0 && (
+              <option value="Unknown">
+                Unknown ({mapCounts.Unknown})
+              </option>
+            )}
           </select>
         </div>
         <div className="filter-group">
@@ -56,32 +81,56 @@ export function MatchList({
         </div>
       </div>
 
-      {/* List */}
+      {/* List header */}
       <div className="panel-title match-list-header">
-        // Match Select <span className="dim">({matches.length}/{totalCount})</span>
+        // Match Select{' '}
+        <span className="dim">
+          ({matches.length}/{totalCount})
+          {indexingState === 'indexing' && <span className="indexing-pulse"> ⏳</span>}
+        </span>
       </div>
+
+      {/* Match cards */}
       <div className="match-scroll">
         {matches.length === 0 ? (
-          <div className="no-data">No matches — load matches.json</div>
+          <div className="no-data">
+            {indexingState === 'idle'
+              ? 'Drop a folder to begin'
+              : indexingState === 'indexing'
+                ? 'Indexing…'
+                : 'No matches found'}
+          </div>
         ) : (
-          matches.map(g => (
-            <div
-              key={g.realMatchId}
-              className={`match-item ${g.realMatchId === activeMatchId ? 'active' : ''}`}
-              onClick={() => onSelectMatch(g.realMatchId)}
-            >
-              <div className="match-id">{g.realMatchId.substring(0, 8)}…</div>
-              <div className="match-meta">
-                <span className={`badge ${MAP_CLASS[g.mapId] || 'badge-ambrose'}`}>
-                  {MAP_SHORT[g.mapId] || g.mapId}
-                </span>
-                <span className="match-counts">
-                  👤{g.humanCount} 🤖{g.botCount}
-                </span>
-                <span className="match-folder dim">{g.folder.replace('February_', 'F')}</span>
+          matches.map(g => {
+            const loadState = matchLoadStates.get(g.realMatchId)
+            const loadBadge = loadState ? LOAD_STATE_BADGE[loadState] : null
+
+            return (
+              <div
+                key={g.realMatchId}
+                className={`match-item ${g.realMatchId === activeMatchId ? 'active' : ''}`}
+                onClick={() => onSelectMatch(g.realMatchId)}
+              >
+                <div className="match-id">{g.realMatchId.substring(0, 8)}…</div>
+                <div className="match-meta">
+                  <span className={`badge ${MAP_CLASS[g.mapId] ?? 'badge-unknown'}`}>
+                    {MAP_SHORT[g.mapId] ?? g.mapId}
+                  </span>
+                  <span className="match-counts">
+                    👤{g.humanCount} 🤖{g.botCount}
+                  </span>
+                  <span className="match-folder dim">
+                    {g.folder.replace('February_', 'F')}
+                  </span>
+                  {loadBadge && (
+                    <span className={`load-badge ${loadBadge.cls}`}>
+                      {loadBadge.label}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>

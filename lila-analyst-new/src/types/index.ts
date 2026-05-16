@@ -1,6 +1,8 @@
 // ── Raw JSON shapes (as written by the Python pipeline) ──────────────────────
 
 export type MapId = 'AmbroseValley' | 'GrandRift' | 'Lockdown'
+export type MapIdOrUnknown = MapId | 'Unknown'
+
 export type EventType =
   | 'Position'
   | 'BotPosition'
@@ -37,6 +39,25 @@ export interface PlayerFile {
   events: RawEvent[]
 }
 
+// ── Lightweight metadata — populated immediately during indexing ──────────────
+// NOTE: This is extracted via regex from the first 50 KB only. No full parse.
+
+export interface MatchMetadata {
+  realMatchId: string
+  /** 'Unknown' until confirmed from file content */
+  mapId: MapIdOrUnknown
+  humanCount: number
+  botCount: number
+  folder: string
+  /** Rough estimate of total events (regex count of first 50 KB slice) */
+  totalEvents: number
+  /** All file paths belonging to this match */
+  filePaths: string[]
+}
+
+/** Per-match load state shown on UI cards */
+export type MatchLoadState = 'indexed' | 'loading' | 'loaded' | 'error'
+
 // ── Processed / app-level types ──────────────────────────────────────────────
 
 export interface ProcessedEvent {
@@ -62,12 +83,23 @@ export interface Player {
   events: ProcessedEvent[]
 }
 
+/** Heavy full-parsed match data — only loaded when user opens a match */
+export interface MatchFullData {
+  realMatchId: string
+  mapId: MapIdOrUnknown
+  players: Player[]
+  allEvents: ProcessedEvent[]
+  durationMs: number
+}
+
+// ── Legacy group type (kept for dataLoader compatibility) ─────────────────────
+
 export interface MatchGroup {
   /** real match UUID (second part of filename) */
   realMatchId: string
   folder: string
-  /** MapId is undefined until replay files are loaded. Updated after detection. */
-  mapId: MapId | undefined
+  /** MapId is 'Unknown' until replay files are loaded. Never defaults to AmbroseValley. */
+  mapId: MapIdOrUnknown
   /** list of json_file paths belonging to this match */
   filePaths: string[]
   /** human player count */
@@ -87,5 +119,14 @@ export interface Layers {
   bots: boolean
 }
 
-export type FilterMap = MapId | 'all'
+export type FilterMap = MapIdOrUnknown | 'all'
 export type FilterDate = 'all' | 'February_10' | 'February_11' | 'February_12' | 'February_13' | 'February_14'
+
+// ── Map counts (computed from indexedMatches) ─────────────────────────────────
+
+export interface MapCounts {
+  AmbroseValley: number
+  GrandRift: number
+  Lockdown: number
+  Unknown: number
+}

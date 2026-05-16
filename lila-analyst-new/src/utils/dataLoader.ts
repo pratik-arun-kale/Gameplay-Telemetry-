@@ -1,5 +1,5 @@
 import type {
-  MatchInfo, PlayerFile, MatchGroup, Player, ProcessedEvent, MapId
+  MatchInfo, PlayerFile, MatchGroup, Player, ProcessedEvent, MapIdOrUnknown
 } from '../types'
 import {
   parseRealMatchId, isHuman, processEvents,
@@ -7,7 +7,8 @@ import {
 } from './mapUtils'
 
 // ── Build MatchGroup index from matches.json ──────────────────────────────────
-// NOTE: mapId is intentionally NOT set here — only populated after replay files are loaded
+// NOTE: mapId starts as 'Unknown' — never defaults to any real map.
+// This function is used as an optional enrichment path only.
 
 export function buildMatchGroups(matchIndex: MatchInfo[]): Map<string, MatchGroup> {
   const groups = new Map<string, MatchGroup>()
@@ -23,18 +24,16 @@ export function buildMatchGroups(matchIndex: MatchInfo[]): Map<string, MatchGrou
       const group: MatchGroup = {
         realMatchId: realId,
         folder: entry.folder,
-        mapId: undefined as any, // Will be set after loading replay files
+        mapId: 'Unknown',   // never defaults to any map — confirmed later
         filePaths: [entry.json_file],
         humanCount: isBot ? 0 : 1,
         botCount: isBot ? 1 : 0,
       }
       groups.set(realId, group)
-      console.debug(`[MatchGroup] realId=${realId} initial file=${entry.json_file}`)
     } else {
       existing.filePaths.push(entry.json_file)
       if (isBot) existing.botCount++
       else existing.humanCount++
-      console.debug(`[MatchGroup] realId=${realId} added file=${entry.json_file}`)
     }
   }
 
@@ -75,25 +74,25 @@ export function processPlayerFile(
 
 // ── Detect map using majority voting across all loaded files ───────────────────
 
-function detectMapByMajority(files: PlayerFile[]): MapId | undefined {
+function detectMapByMajority(files: PlayerFile[]): MapIdOrUnknown {
   const mapCounts = new Map<string, number>()
 
   for (const file of files) {
     if (!file.events?.length) continue
-    const mapId = file.events[0]?.map_id as MapId | undefined
+    const mapId = file.events[0]?.map_id as string | undefined
     if (!mapId) continue
     mapCounts.set(mapId, (mapCounts.get(mapId) ?? 0) + 1)
   }
 
-  if (mapCounts.size === 0) return undefined
+  if (mapCounts.size === 0) return 'Unknown'
 
   // Return map with highest count
-  let maxMap: MapId | undefined
+  let maxMap: string | undefined
   let maxCount = 0
   for (const [mapId, count] of mapCounts) {
     if (count > maxCount) {
       maxCount = count
-      maxMap = mapId as MapId
+      maxMap = mapId
     }
   }
 
@@ -102,13 +101,18 @@ function detectMapByMajority(files: PlayerFile[]): MapId | undefined {
     console.warn('[MapDetection] Multiple maps in same group:', Object.fromEntries(mapCounts))
   }
 
-  return maxMap
+  const VALID_MAPS = ['AmbroseValley', 'GrandRift', 'Lockdown'] as const
+  if (maxMap && VALID_MAPS.includes(maxMap as typeof VALID_MAPS[number])) {
+    return maxMap as MapIdOrUnknown
+  }
+
+  return 'Unknown'
 }
 
 // ── Merge multiple PlayerFiles into a single match dataset ───────────────────
 
 export interface MatchData {
-  mapId: MapId | undefined
+  mapId: MapIdOrUnknown
   players: Player[]
   allEvents: ProcessedEvent[]   // merged + globally re-normalised
   durationMs: number
@@ -116,7 +120,7 @@ export interface MatchData {
 
 export function mergeMatchFiles(files: PlayerFile[]): MatchData {
   if (!files.length) {
-    return { mapId: undefined, players: [], allEvents: [], durationMs: 0 }
+    return { mapId: 'Unknown', players: [], allEvents: [], durationMs: 0 }
   }
 
   let humanIdx = 0
@@ -141,7 +145,6 @@ export function mergeMatchFiles(files: PlayerFile[]): MatchData {
   // Global normalise: shift all events so the earliest is t=0
   const allRaw = players.flatMap(p => p.events)
   if (!allRaw.length) {
-    // No valid events, but still detect map from file metadata
     const detectedMap = detectMapByMajority(files)
     return { mapId: detectedMap, players, allEvents: [], durationMs: 0 }
   }
@@ -160,9 +163,9 @@ export function mergeMatchFiles(files: PlayerFile[]): MatchData {
     .map(e => ({ ...e, tsRel: e.tsMs - globalMin }))
     .sort((a, b) => a.tsRel - b.tsRel)
 
-  // Detect map using majority voting (not just files[0])
+  // Detect map using majority voting
   const mapId = detectMapByMajority(files)
-  if (!mapId) {
+  if (mapId === 'Unknown') {
     console.error('[MapDetection] No valid map detected from', files.length, 'files')
   }
 

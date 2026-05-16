@@ -1,16 +1,17 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import type { Player, ProcessedEvent, Layers, MapId } from '../types'
+import type { Player, ProcessedEvent, Layers, MapId, MapIdOrUnknown } from '../types'
 import { renderFrame } from '../utils/renderer'
 
 // ── Static minimap URLs (served from /public/minimaps/) ───────────────────────
-const MINIMAP_SRC: Record<MapId, string> = {
+const MINIMAP_SRC: Partial<Record<MapIdOrUnknown, string>> = {
   AmbroseValley: '/minimaps/AmbroseValley_Minimap.webp',
   GrandRift:     '/minimaps/GrandRift_Minimap.webp',
   Lockdown:      '/minimaps/Lockdown_Minimap.webp',
+  // 'Unknown' intentionally omitted — no minimap for undetected maps
 }
 
 interface Props {
-  mapId: MapId | undefined          // undefined until replay is confirmed
+  mapId: MapIdOrUnknown | undefined  // undefined until replay is confirmed, 'Unknown' if undetected
   players: Player[]
   allEvents: ProcessedEvent[]
   selectedPlayers: Set<string>
@@ -27,8 +28,9 @@ export function MapCanvas({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Only render map if we have BOTH a confirmed map AND replay data
-  const canRender = hasMatch && mapId && !isLoading && (players.length > 0 || allEvents.length > 0)
+  // Only render map if we have a known map, replay data, and are not loading
+  const hasKnownMap = mapId && mapId !== 'Unknown' && MINIMAP_SRC[mapId]
+  const canRender = hasMatch && hasKnownMap && !isLoading && (players.length > 0 || allEvents.length > 0)
 
   // Zoom / pan
   const [zoom, setZoom] = useState(1)
@@ -123,7 +125,7 @@ export function MapCanvas({
         </div>
       ) : null}
 
-      {/* Map + overlay — ONLY render if canRender is true */}
+      {/* Map + overlay — ONLY render if canRender is true (hasKnownMap guarantees mapId !== 'Unknown') */}
       {canRender && mapId && (
         <div
           className="map-wrap"
@@ -134,7 +136,7 @@ export function MapCanvas({
           {/* Minimap — loaded from /public/minimaps/ automatically */}
           <img
             className="map-img"
-            src={MINIMAP_SRC[mapId]}
+            src={MINIMAP_SRC[mapId as MapId]}
             alt={mapId}
             draggable={false}
             key={mapId}  // Force re-render if mapId changes
@@ -156,7 +158,7 @@ export function MapCanvas({
             onMouseLeave={() => setTooltip(null)}
           />
 
-          {canRender && <div className="map-label">{mapId.toUpperCase()}</div>}
+          <div className="map-label">{mapId.toUpperCase()}</div>
         </div>
       )}
 
