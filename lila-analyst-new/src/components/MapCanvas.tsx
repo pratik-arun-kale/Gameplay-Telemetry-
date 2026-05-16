@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import type { Player, ProcessedEvent, Layers, MapId, MapIdOrUnknown } from '../types'
 import { renderFrame } from '../utils/renderer'
+import { ReplayLegend } from './ReplayLegend'
 
 // ── Static minimap URLs (served from /public/minimaps/) ───────────────────────
 const MINIMAP_SRC: Partial<Record<MapIdOrUnknown, string>> = {
@@ -41,14 +42,33 @@ export function MapCanvas({
   // Tooltip
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
 
-  // Redraw whenever data or timeline changes
+  // Hovered player from legend — used to boost opacity on canvas
+  const [hoveredPlayer, setHoveredPlayer] = useState<string | null>(null)
+
+  // Redraw whenever data, timeline, or hovered player changes
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    // If a player is hovered from the legend, temporarily boost their path visibility
+    let effectivePlayers = players
+    if (hoveredPlayer) {
+      effectivePlayers = players.map(p =>
+        p.userId === hoveredPlayer
+          ? { ...p, color: p.color }   // keep color; renderer checks selectedPlayers for visibility
+          : p
+      )
+      // Add hovered player to the selected set temporarily
+      const boostedSelected = new Set(selectedPlayers)
+      boostedSelected.add(hoveredPlayer)
+      renderFrame(ctx, CANVAS_SIZE, allEvents, effectivePlayers, boostedSelected, cutoffRel, layers)
+      return
+    }
+
     renderFrame(ctx, CANVAS_SIZE, allEvents, players, selectedPlayers, cutoffRel, layers)
-  }, [allEvents, players, selectedPlayers, cutoffRel, layers])
+  }, [allEvents, players, selectedPlayers, cutoffRel, layers, hoveredPlayer])
 
   // Zoom
   const applyZoom = useCallback((delta: number) => {
@@ -168,6 +188,16 @@ export function MapCanvas({
         <button className="zoom-btn" onClick={() => applyZoom(-0.25)}>−</button>
         <button className="zoom-btn zoom-reset" onClick={resetView}>⊙</button>
       </div>
+
+      {/* Legend overlay — positioned absolute inside map-area, not inside map-wrap */}
+      {canRender && (
+        <ReplayLegend
+          players={players}
+          selectedPlayers={selectedPlayers}
+          layers={layers}
+          onHoverPlayer={setHoveredPlayer}
+        />
+      )}
 
       {tooltip && (
         <div className="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
