@@ -1,4 +1,6 @@
 import React, { useRef, useState, useCallback } from 'react'
+import { validateReplayFiles } from '../replay/fileValidation'
+import { UploadErrorBanner } from './UploadErrorBanner'
 
 interface Props {
   onFiles: (files: File[]) => void
@@ -40,6 +42,11 @@ export function UploadZone({ onFiles }: Props) {
   const [drag, setDrag]         = useState(false)
   const [loading, setLoading]   = useState(false)
   const [loaded, setLoaded]     = useState(0)
+  const [invalids, setInvalids] = useState<any[]>([])
+  const [successFlash, setSuccessFlash] = useState(false)
+  const [isHelperOpen, setIsHelperOpen] = useState(false)
+
+  const NOTEBOOK_URL = 'https://colab.research.google.com/drive/1-Vxbe1GsLACg7VR8lOc92WGLIi1Ic31s#scrollTo=main'
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
@@ -51,6 +58,7 @@ export function UploadZone({ onFiles }: Props) {
 
     setLoading(true)
     setLoaded(0)
+    setInvalids([])
 
     const entries = items
       .filter(i => i.kind === 'file')
@@ -62,29 +70,89 @@ export function UploadZone({ onFiles }: Props) {
       const files = await readEntryFiles(entry)
       allFiles.push(...files)
     }
-
-    const jsonFiles = allFiles.filter(f => f.name.endsWith('.json'))
-    setLoaded(jsonFiles.length)
+    // validate
+    const { valid, invalid } = await validateReplayFiles(allFiles)
+    setLoaded(valid.length)
+    setInvalids(invalid)
     setLoading(false)
-    if (jsonFiles.length) onFiles(jsonFiles)
+    if (valid.length) {
+      onFiles(valid)
+      setSuccessFlash(true)
+      setIsHelperOpen(false)
+      setTimeout(() => setSuccessFlash(false), 1600)
+    }
   }, [onFiles])
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return
-    const files = Array.from(e.target.files).filter(f => f.name.endsWith('.json'))
-    setLoaded(files.length)
-    if (files.length) onFiles(files)
+    const all = Array.from(e.target.files)
+    setLoading(true)
+    setInvalids([])
+    const { valid, invalid } = await validateReplayFiles(all)
+    setLoaded(valid.length)
+    setInvalids(invalid)
+    setLoading(false)
+    if (valid.length) {
+      onFiles(valid)
+      setSuccessFlash(true)
+      setIsHelperOpen(false)
+      setTimeout(() => setSuccessFlash(false), 1600)
+    }
     e.target.value = '' // reset so same folder can be re-selected
   }, [onFiles])
 
   return (
-    <div
-      className={`upload-zone ${drag ? 'drag-over' : ''}`}
-      onDragOver={e => { e.preventDefault(); setDrag(true) }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={handleDrop}
-    >
-      <div className="up-icon">{loading ? '⏳' : loaded > 0 ? '✓' : '⬆'}</div>
+    <>
+      <div className={`upload-preprocess-card ${isHelperOpen ? 'open' : 'collapsed'}`}>
+        <button
+          type="button"
+          className="preprocess-header"
+          onClick={() => setIsHelperOpen(open => !open)}
+          aria-expanded={isHelperOpen}
+        >
+          <span className="preprocess-arrow">▶</span>
+          <span>Process Raw Telemetry Data</span>
+          <span className="preprocess-hint">Click to {isHelperOpen ? 'collapse' : 'expand'}</span>
+        </button>
+
+        <div className="upload-preprocess-body">
+          <div className="upload-preprocess-copy">
+            <div className="upload-preprocess-headline">
+              <span>Have raw <strong>.parquet</strong> gameplay files?</span>
+              <button
+                type="button"
+                className="preprocess-tooltip"
+                title="Parquet telemetry files are large and optimized for analytics pipelines. The notebook converts them into lightweight replay-ready JSON for fast browser visualization."
+              >
+                Why preprocessing?
+              </button>
+            </div>
+            <p>Use the preprocessing notebook to:</p>
+            <ul>
+              <li>upload parquet files</li>
+              <li>extract gameplay telemetry</li>
+              <li>generate optimized replay JSON</li>
+            </ul>
+            <div className="upload-flow-line">Parquet Files → Processing Notebook → Replay JSON → Upload Here</div>
+          </div>
+          <a
+            className="upload-preprocess-cta"
+            href={NOTEBOOK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open Processing Notebook
+          </a>
+        </div>
+      </div>
+
+      <div
+        className={`upload-zone ${drag ? 'drag-over' : ''}`}
+        onDragOver={e => { e.preventDefault(); setDrag(true) }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={handleDrop}
+      >
+      <div className="up-icon">{loading ? '⏳' : successFlash ? '✔' : loaded > 0 ? '✓' : '⬆'}</div>
       <div className="up-text">
         {loading
           ? <strong>Reading folder…</strong>
@@ -92,7 +160,8 @@ export function UploadZone({ onFiles }: Props) {
             ? <strong style={{ color: 'var(--green)' }}>{loaded} files loaded</strong>
             : <strong>Drop folder or files here</strong>
         }
-        <span>matches.json + February_10…14 folders</span>
+          <span>matches.json + February_10…14 folders</span>
+          <div className="upload-warning">Only .json replay files are supported</div>
       </div>
 
       {/* Two buttons: pick files OR pick folder */}
@@ -132,6 +201,9 @@ export function UploadZone({ onFiles }: Props) {
         style={{ display: 'none' }}
         onChange={handleInputChange}
       />
+      {/* Error banner (shows unsupported/skipped files) */}
+      <UploadErrorBanner invalids={invalids} />
     </div>
+    </>
   )
 }

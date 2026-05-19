@@ -140,7 +140,6 @@ function reducer(state: AppState, action: Action): AppState {
       while (newOrder.length > MAX_LOADED_MATCHES) {
         const evict = newOrder.shift()!
         newLoaded.delete(evict)
-        console.debug(`[LRU] Evicted match from cache: ${evict.slice(0, 8)}…`)
       }
 
       return { ...state, loadedMatches: newLoaded, loadedMatchOrder: newOrder }

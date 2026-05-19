@@ -61,10 +61,10 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
           const parsed = JSON.parse(text)
           if (Array.isArray(parsed) && parsed.length > 0 && 'json_file' in parsed[0]) {
             matchesJson = parsed as MatchInfo[]
-            console.debug(`[FileLoader] matches.json: ${matchesJson.length} entries`)
+            // parsed successfully
           }
         } catch {
-          console.warn('[FileLoader] Failed to parse matches.json — continuing without it')
+          // silently continue without matches.json
         }
         continue
       }
@@ -109,7 +109,7 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
         worker.terminate()
         workerRef.current = null
       } else if (msg.type === 'error') {
-        console.error('[Worker] Indexing error:', msg.message)
+        // log error internally or leave out of production console
         dispatch({ type: 'SET_STATUS', value: `⚠ INDEXING ERROR: ${msg.message}` })
         worker.terminate()
         workerRef.current = null
@@ -117,7 +117,7 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
     }
 
     worker.onerror = (err) => {
-      console.error('[Worker] Uncaught error:', err)
+      // uncaught worker error
       dispatch({ type: 'SET_STATUS', value: '⚠ WORKER ERROR — see console' })
     }
 
@@ -132,7 +132,7 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
     // Check LRU cache first — instant if already loaded
     const cached = state.loadedMatches.get(realMatchId)
     if (cached) {
-      console.debug(`[LoadMatch] Cache hit: ${realMatchId.slice(0, 8)}`)
+      // cache hit
       dispatch({ type: 'START_LOADING_MATCH' })
       dispatch({
         type: 'LOAD_MATCH',
@@ -147,7 +147,7 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
 
     const metadata = state.indexedMatches.get(realMatchId)
     if (!metadata) {
-      console.error('[LoadMatch] Match not in index:', realMatchId)
+      // match not in index
       return
     }
 
@@ -169,7 +169,7 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
       )
 
       if (!file) {
-        console.warn(`[LoadMatch] File not in cache: ${fp}`)
+        // file not in cache
         missing.push(basename)
         continue
       }
@@ -181,11 +181,11 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
         if (parsed?.events?.length) {
           playerFileDatas.push(parsed)
         } else {
-          console.warn(`[LoadMatch] No events in file: ${basename}`)
+          // no events in file
           missing.push(basename)
         }
       } catch {
-        console.warn(`[LoadMatch] Failed to parse: ${basename}`)
+        // failed to parse file
         missing.push(basename)
       }
     }
@@ -210,10 +210,7 @@ export function useFileLoader(state: AppState, dispatch: Dispatch) {
     // Full merge + event processing
     const { mapId, players, allEvents, durationMs } = mergeMatchFiles(playerFileDatas)
 
-    console.debug(
-      `[LoadMatch] ${realMatchId.slice(0, 8)}: map=${mapId}, ` +
-      `${players.length} players, ${allEvents.length} events, ${durationMs}ms`
-    )
+    // processed match successfully
 
     // Build full data object and store in LRU cache
     const fullData: MatchFullData = {

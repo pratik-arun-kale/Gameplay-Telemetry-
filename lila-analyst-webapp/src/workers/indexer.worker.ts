@@ -57,7 +57,7 @@ self.onmessage = async (event: MessageEvent<WorkerInMsg>) => {
           const extracted = extractMetaFromSlice(meta)
           if (extracted) allExtracted.push(extracted)
         } catch (err) {
-          console.warn(`[Worker] Failed to extract metadata from: ${meta.name}`, err)
+          // ignore extraction failures for production
         }
         indexed++
       }

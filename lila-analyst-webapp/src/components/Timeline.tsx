@@ -11,11 +11,15 @@ interface Props {
   onPause: () => void
   onRewind: () => void
   onSpeedChange: (v: number) => void
+  events?: { tsRel: number; event: string }[]
+  cinematicEnabled?: boolean
+  onToggleCinematic?: (v: boolean) => void
 }
 
 export function Timeline({
   current, duration, isPlaying, playSpeed,
   onSeek, onPlay, onPause, onRewind, onSpeedChange,
+  events = [], cinematicEnabled = false, onToggleCinematic,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -54,39 +58,75 @@ export function Timeline({
   }, [seekFromEvent, duration, onSeek])
 
   return (
-    <div className="timeline-section">
-      <div className="panel-title">// Timeline</div>
+    <div className="timeline-footer">
+      <div className="timeline-top-row">
+        <div className="timeline-meta">
+          <div className="tl-time">{timeStr}</div>
+          <div className="timeline-duration">/ {totalStr}</div>
+        </div>
 
-      <div className="tl-time">{timeStr} <span className="dim">/ {totalStr}</span></div>
+        <div className="pb-controls">
+          <button className="pb-btn" onClick={onRewind} title="Restart replay">⏮</button>
+          <button className="pb-btn" onClick={() => onSeek(Math.max(0, current - 250))} title="Step back 250ms">◀</button>
+          <button
+            className={`pb-btn ${isPlaying ? 'active' : ''}`}
+            onClick={isPlaying ? onPause : onPlay}
+            title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <button className="pb-btn" onClick={() => onSeek(Math.min(duration, current + 250))} title="Step forward 250ms">▶</button>
 
-      <div
-        ref={barRef}
-        className="tl-bar"
-        onMouseDown={onBarMouseDown}
-        onClick={onBarClick}
-      >
-        <div className="tl-fill" style={{ width: `${pct}%` }} />
-        <div className="tl-thumb" style={{ left: `calc(${pct}% - 5px)` }} />
+          <select
+            className="pb-speed"
+            value={playSpeed}
+            onChange={e => onSpeedChange(parseFloat(e.target.value))}
+            title="Playback speed"
+          >
+            <option value={0.1}>0.1×</option>
+            <option value={0.25}>0.25×</option>
+            <option value={0.5}>0.5×</option>
+            <option value={1}>1×</option>
+            <option value={2}>2×</option>
+          </select>
+
+          <label className={`pb-cinematic ${cinematicEnabled ? 'active' : ''}`} title="Enable cinematic mode">
+            <input
+              type="checkbox"
+              checked={cinematicEnabled}
+              onChange={e => onToggleCinematic && onToggleCinematic(e.target.checked)}
+            />
+            <span>🎬</span>
+          </label>
+        </div>
       </div>
 
-      <div className="pb-controls">
-        <button className="pb-btn" onClick={onRewind} title="Rewind">⏮</button>
-        {isPlaying
-          ? <button className="pb-btn active" onClick={onPause} title="Pause">⏸</button>
-          : <button className="pb-btn" onClick={onPlay}  title="Play">▶</button>
-        }
-        <select
-          className="pb-speed"
-          value={playSpeed}
-          onChange={e => onSpeedChange(parseFloat(e.target.value))}
-        >
-          <option value={0.25}>0.25×</option>
-          <option value={0.5}>0.5×</option>
-          <option value={1}>1×</option>
-          <option value={2}>2×</option>
-          <option value={5}>5×</option>
-          <option value={10}>10×</option>
-        </select>
+      <div className="timeline-bar-wrapper">
+        <div className="timeline-bar-inner">
+          <div
+            ref={barRef}
+            className="tl-bar"
+            onMouseDown={onBarMouseDown}
+            onClick={onBarClick}
+          >
+            {events.map((ev, i) => {
+              const left = duration > 0 ? Math.max(0, Math.min(100, (ev.tsRel / duration) * 100)) : 0
+              const color = ev.event === 'Loot' ? '#ffd700' : (ev.event === 'KilledByStorm' ? '#bf5fff' : '#ff3333')
+              const title = `${ev.event} · ${formatMs(ev.tsRel)}`
+              return (
+                <div
+                  key={i}
+                  className="tl-event-marker"
+                  style={{ left: `${left}%`, background: color }}
+                  title={title}
+                />
+              )
+            })}
+
+            <div className="tl-fill" style={{ width: `${pct}%` }} />
+            <div className="tl-thumb" style={{ left: `calc(${pct}% - 5px)` }} />
+          </div>
+        </div>
       </div>
     </div>
   )
